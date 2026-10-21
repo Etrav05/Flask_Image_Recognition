@@ -2,7 +2,7 @@
 
 # Importing required libs
 from flask import Flask, render_template, request
-from model import preprocess_img, predict_result
+from PIL import UnidentifiedImageError
 from werkzeug.exceptions import BadRequestKeyError
 from model import preprocess_img, predict_result
 
@@ -27,7 +27,6 @@ def predict_image_file():
         return render_template("result.html", predictions=str(pred))
 
     except (BadRequestKeyError, UnidentifiedImageError):
-        print(type(e))
         error = "File cannot be processed."
         return render_template("result.html", err=error)
 
