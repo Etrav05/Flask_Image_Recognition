@@ -4,6 +4,12 @@ from io import BytesIO
 import pytest
 from threading import Thread
 
+import numpy as np
+from PIL import Image
+
+TEST_IMAGE = "test_images/0/Sign 0 (21).jpeg"
+ERROR_MSG = b"File cannot be processed."
+
 # Helper function for concurrent image uploads
 def upload_image(client, img_data):
     """
@@ -17,6 +23,23 @@ def upload_image(client, img_data):
         content_type="multipart/form-data"
     )
 
+def load_sample_image(filename):
+    """Return the test image's bytes as an in-memory file with the given filename."""
+    with open(TEST_IMAGE, "rb") as file:
+        img_data = BytesIO(file.read())
+    img_data.name = filename
+    return img_data
+
+
+def post_image(client, img_data, **kwargs):
+    """POST an in-memory file to the prediction route."""
+    return client.post(
+        "/prediction",
+        data={"file": (img_data, img_data.name)},
+        content_type="multipart/form-data",
+        **kwargs
+    )
+
 # 1. Edge Case: Uploading a Large Image File
 def test_edge_case_large_image_upload(client):
     """
@@ -24,7 +47,11 @@ def test_edge_case_large_image_upload(client):
     - Scenario: Simulates a file upload with a large image (e.g., 10 MB).
     - Expected Behavior: System should handle the file and return a valid prediction response.
     """
-    large_img_data = BytesIO(b"large_image_data" * 10**6)  # Simulating a large image
+    ## Simple way to create fake large images
+    pixels = np.random.default_rng(seed=0).integers(0, 256, (3000, 3000, 3), dtype=np.uint8)
+    large_img_data = BytesIO()
+    Image.fromarray(pixels).save(large_img_data, format="JPEG", quality=95)
+    large_img_data.seek(0)
     large_img_data.name = "large_image.jpg"
 
     response = client.post(
@@ -34,7 +61,8 @@ def test_edge_case_large_image_upload(client):
     )
 
     # Assert that the system can process large image files
-    assert b"Prediction" in response.data  # Adjust based on actual prediction content
+    assert response.status_code == 200
+    assert ERROR_MSG not in response.data  # Adjust based on actual prediction content
 
 # 2. Edge Case: Uploading an Image with Missing or Incorrect Metadata
 def test_edge_case_invalid_metadata(client):
@@ -43,7 +71,10 @@ def test_edge_case_invalid_metadata(client):
     - Scenario: Upload an image without any metadata or with invalid metadata.
     - Expected Behavior: System processes the image regardless of metadata issues.
     """
-    img_data = BytesIO(b"image_with_no_metadata")
+    img_data = BytesIO()
+    with Image.open(TEST_IMAGE) as img:
+        img.save(img_data, format="JPEG")
+    img_data.seek(0)
     img_data.name = "image_no_metadata.jpg"
 
     response = client.post(
@@ -53,7 +84,8 @@ def test_edge_case_invalid_metadata(client):
     )
 
     # Assert that the system processes the image even without metadata
-    assert b"Prediction" in response.data  # Adjust based on actual behavior
+    assert response.status_code == 200
+    assert ERROR_MSG not in response.data  # Adjust based on actual behavior
 
 # 3. Edge Case: Uploading an Image with Non-Standard File Extensions
 def test_edge_case_non_standard_image_extensions(client):
@@ -62,7 +94,10 @@ def test_edge_case_non_standard_image_extensions(client):
     - Scenario: Upload a file with an uncommon extension, e.g., .webp.
     - Expected Behavior: System processes the file as a valid image.
     """
-    img_data = BytesIO(b"valid_image_data")
+    img_data = BytesIO()
+    with Image.open(TEST_IMAGE) as img:
+        img.save(img_data, format="JPEG")
+    img_data.seek(0)
     img_data.name = "non_standard_image.webp"  # Non-standard extension
 
     response = client.post(
@@ -72,7 +107,8 @@ def test_edge_case_non_standard_image_extensions(client):
     )
 
     # Ensure the system processes the file despite the non-standard extension
-    assert b"Prediction" in response.data  # Adjust based on actual prediction content
+    assert response.status_code == 200
+    assert ERROR_MSG not in response.data  # Adjust based on actual prediction content
 
 # 4. Edge Case: Uploading a Sequence of Images for Multi-Step Processing
 def test_edge_case_sequential_image_uploads(client):
@@ -81,10 +117,16 @@ def test_edge_case_sequential_image_uploads(client):
     - Scenario: Simulate sequential uploads of multiple images.
     - Expected Behavior: Each upload should trigger a separate valid prediction response.
     """
-    img_data1 = BytesIO(b"first_image_data")
+    img_data1 = BytesIO()
+    with Image.open(TEST_IMAGE) as img:
+        img.save(img_data1, format="JPEG")
+    img_data1.seek(0)
     img_data1.name = "first_image.jpg"
 
-    img_data2 = BytesIO(b"second_image_data")
+    img_data2 = BytesIO()
+    with Image.open(TEST_IMAGE) as img:
+        img.save(img_data2, format="JPEG")
+    img_data2.seek(0)
     img_data2.name = "second_image.jpg"
 
     # First upload
@@ -102,8 +144,10 @@ def test_edge_case_sequential_image_uploads(client):
     )
 
     # Ensure that each upload processed correctly
-    assert b"Prediction" in response1.data
-    assert b"Prediction" in response2.data
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+    assert ERROR_MSG not in response1.data
+    assert ERROR_MSG not in response2.data
 
 # 5. Edge Case: Uploading with Unexpected Headers
 def test_edge_case_unexpected_headers(client):
@@ -112,7 +156,10 @@ def test_edge_case_unexpected_headers(client):
     - Scenario: Simulate sending headers not expected by the system.
     - Expected Behavior: System should still process the file without errors.
     """
-    img_data = BytesIO(b"valid_image_data")
+    img_data = BytesIO()
+    with Image.open(TEST_IMAGE) as img:
+        img.save(img_data, format="JPEG")
+    img_data.seek(0)
     img_data.name = "unexpected_headers_image.jpg"
 
     # Simulate uploading with unexpected headers
@@ -124,7 +171,8 @@ def test_edge_case_unexpected_headers(client):
     )
 
     # Assert that the upload is still processed correctly despite the unexpected header
-    assert b"Prediction" in response.data
+    assert response.status_code == 200
+    assert ERROR_MSG not in response.data
 
 # 6. Edge Case: Uploading an Image with HTTP/2
 def test_edge_case_upload_over_http2(client):
@@ -133,7 +181,10 @@ def test_edge_case_upload_over_http2(client):
     - Scenario: Simulate uploading an image over HTTP/2 protocol.
     - Expected Behavior: System processes the upload as it would over HTTP/1.1.
     """
-    img_data = BytesIO(b"valid_image_data")
+    img_data = BytesIO()
+    with Image.open(TEST_IMAGE) as img:
+        img.save(img_data, format="JPEG")
+    img_data.seek(0)
     img_data.name = "http2_image.jpg"
 
     # Simulate uploading the image using HTTP/2 (client would need to support it)
@@ -144,4 +195,5 @@ def test_edge_case_upload_over_http2(client):
     )
 
     # Ensure that the image upload works successfully over HTTP/2
-    assert b"Prediction" in response.data
+    assert response.status_code == 200
+    assert ERROR_MSG not in response.data
