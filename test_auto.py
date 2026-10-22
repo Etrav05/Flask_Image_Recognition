@@ -13,7 +13,7 @@ SAMPLE_IMAGE = "test_images/2/Sign 2 (97).jpeg"
 ERROR_MSG = b"File cannot be processed."
 
 
-@pytest.fixture
+@pytest.fixture(name="client")
 def client_fixture():
     """Flask test client for sending requests to the app."""
     flask_app.config["TESTING"] = True
