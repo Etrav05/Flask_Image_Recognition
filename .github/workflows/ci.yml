@@ -24,6 +24,8 @@ jobs:
 
       - run: pylint $(git ls-files '*.py')
 
+      - run: pytest -v
+
       - if: always()
         run: |
           echo "## CI result: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
