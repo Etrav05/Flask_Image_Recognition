@@ -1,25 +1,21 @@
-name: CI
+name: Modern CI
 
 on:
   push:
-    branches:
-      - main  # Run on pushes made into the main branch
+    branches: [ main ]  # Run on pushes made into the main branch
   pull_request:
-    branches:
-      - main  # Run on pull requests targeting the main branch
+    branches: [ main ]  # Run on pull requests targeting the main branch
 
 jobs:
-  test:
+  quality-checks:
     runs-on: ubuntu-latest  # Specify the OS to run the job
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2  # Checks out your repository's code
+      - uses: actions/checkout@v4  # Checks out your repository's code
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'  # Specify the Python version
+          python-version: '3.10'  # Specify the Python version
 
       - name: Install dependencies
         run: |
